@@ -1,0 +1,62 @@
+Unnatural Aim Patterns Detection
+
+-- Server-side detection
+local function detectUnnaturalAim(player)
+    local lastAimPositions = {}
+    local maxSampleSize = 30
+    
+    return player.CharacterAdded:Connect(function(character)
+        local humanoid = character:WaitForChild("Humanoid")
+        
+        humanoid:GetPropertyChangedSignal("CameraOffset"):Connect(function()
+            -- Analyze aim patterns for robotic movement
+        end)
+    end)
+end
+
+
+Input Validation
+
+-- Check for missing mouse inputs during perfect aim
+local function validateInputs(player)
+    local mouse = player:GetMouse()
+    local lastInput = os.clock()
+    
+    mouse.Move:Connect(function()
+        lastInput = os.clock()
+    end)
+    
+    while true do
+        if (os.clock() - lastInput) > 1 and player.Character then
+            -- Player is hitting shots without mouse movement
+            warn("Possible aimbot detected:", player.Name)
+        end
+        task.wait(1)
+    end
+end
+
+Statistical Analysis
+
+-- Track headshot percentages
+local HEADSHOT_THRESHOLD = 0.9 -- 90% headshots
+local MIN_SHOTS = 20
+
+local function trackAccuracy(player)
+    local headshots = 0
+    local totalShots = 0
+    
+    player.CharacterAdded:Connect(function(character)
+        local humanoid = character:WaitForChild("Humanoid")
+        
+        humanoid.Touched:Connect(function(hit)
+            if hit.Name == "Head" then
+                headshots = headshots + 1
+            end
+            totalShots = totalShots + 1
+            
+            if totalShots > MIN_SHOTS and (headshots/totalShots) > HEADSHOT_THRESHOLD then
+                warn("Suspicious accuracy detected:", player.Name)
+            end
+        end)
+    end)
+end
