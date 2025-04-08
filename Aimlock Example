@@ -1,0 +1,131 @@
+--# Advanced Auto-Lock System for Anti-Cheat Development
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Configuration
+local LOCK_KEY = Enum.KeyCode.Q
+local LOCK_RANGE = 100 -- Studs
+local LOCK_FOV = 90 -- Degrees
+local SMOOTHING_FACTOR = 0.2 -- Lower = smoother
+local DEBUG_MODE = true -- Visualizes lock-on
+
+-- System Variables
+local lockedTarget = nil
+local lockEnabled = false
+local debugParts = {}
+
+-- Initialize character
+local function ensureCharacter()
+    repeat task.wait() until LocalPlayer.Character
+    return LocalPlayer.Character
+end
+
+-- Find target within FOV
+local function findTarget()
+    local camera = workspace.CurrentCamera
+    local character = ensureCharacter()
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+    
+    local bestTarget = nil
+    local bestAngle = LOCK_FOV
+    local bestDistance = LOCK_RANGE
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local targetHead = player.Character:FindFirstChild("Head")
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            
+            if targetHead and humanoid and humanoid.Health > 0 then
+                local direction = targetHead.Position - camera.CFrame.Position
+                local distance = direction.Magnitude
+                
+                if distance <= LOCK_RANGE then
+                    local angle = math.deg(math.acos(camera.CFrame.LookVector:Dot(direction.Unit)))
+                    
+                    if angle < bestAngle or (angle == bestAngle and distance < bestDistance) then
+                        bestAngle = angle
+                        bestDistance = distance
+                        bestTarget = player.Character
+                    end
+                end
+            end
+        end
+    end
+    
+    return bestTarget
+end
+
+-- Smooth aiming transition
+local function smoothAim(targetPart)
+    local camera = workspace.CurrentCamera
+    local currentCF = camera.CFrame
+    local targetCF = CFrame.new(currentCF.Position, targetPart.Position)
+    
+    return currentCF:Lerp(targetCF, SMOOTHING_FACTOR)
+end
+
+-- Debug visualization
+local function updateDebugVisuals(target)
+    -- Clear old visuals
+    for _, part in ipairs(debugParts) do
+        part:Destroy()
+    end
+    debugParts = {}
+    
+    if DEBUG_MODE and target then
+        local head = target:FindFirstChild("Head")
+        if head then
+            local highlight = Instance.new("Highlight")
+            highlight.FillColor = Color3.fromRGB(255, 0, 0)
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 0)
+            highlight.Adornee = head
+            highlight.Parent = head
+            table.insert(debugParts, highlight)
+        end
+    end
+end
+
+-- Main lock system
+local function updateLock()
+    if not lockEnabled then return end
+    
+    local targetCharacter = findTarget()
+    if targetCharacter then
+        local head = targetCharacter:FindFirstChild("Head")
+        if head then
+            lockedTarget = head
+            workspace.CurrentCamera.CFrame = smoothAim(head)
+            updateDebugVisuals(targetCharacter)
+            return
+        end
+    end
+    
+    lockedTarget = nil
+    updateDebugVisuals(nil)
+end
+
+-- Toggle system
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == LOCK_KEY then
+        lockEnabled = not lockEnabled
+        print("Auto-lock", lockEnabled and "enabled" or "disabled")
+        
+        if not lockEnabled then
+            lockedTarget = nil
+            updateDebugVisuals(nil)
+        end
+    end
+end)
+
+-- Main loop
+RunService.RenderStepped:Connect(updateLock)
+
+print("Auto-lock system initialized. Press", LOCK_KEY, "to toggle.")
+
+
+
