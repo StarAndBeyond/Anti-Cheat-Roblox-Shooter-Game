@@ -1,0 +1,250 @@
+--# Advanced ESP System for Anti-Cheat Research
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Configuration
+local ESP_ENABLED = true
+local TEAM_CHECK = true -- Only show enemy team
+local MAX_DISTANCE = 500 -- Studs
+local BOX_COLOR_ENEMY = Color3.fromRGB(255, 0, 0)
+local BOX_COLOR_FRIENDLY = Color3.fromRGB(0, 255, 0)
+local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
+local TEXT_SIZE = 18
+local HEALTH_BAR = true
+
+-- ESP Storage
+local espObjects = {}
+local connections = {}
+
+-- Creates ESP components for a character
+local function createEsp(character)
+    if not character or not character:FindFirstChild("Humanoid") then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "ESPHighlight"
+    highlight.Adornee = character
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillTransparency = 0.8
+    highlight.OutlineTransparency = 0
+    
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "ESPInfo"
+    billboard.Adornee = character:WaitForChild("Head")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    
+    local playerName = Instance.new("TextLabel")
+    playerName.Name = "PlayerName"
+    playerName.Size = UDim2.new(1, 0, 0.5, 0)
+    playerName.BackgroundTransparency = 1
+    playerName.TextColor3 = TEXT_COLOR
+    playerName.TextSize = TEXT_SIZE
+    playerName.TextStrokeTransparency = 0
+    playerName.Font = Enum.Font.SourceSansBold
+    playerName.Text = character.Name
+    
+    local distanceText = Instance.new("TextLabel")
+    distanceText.Name = "Distance"
+    distanceText.Size = UDim2.new(1, 0, 0.5, 0)
+    distanceText.Position = UDim2.new(0, 0, 0.5, 0)
+    distanceText.BackgroundTransparency = 1
+    distanceText.TextColor3 = TEXT_COLOR
+    distanceText.TextSize = TEXT_SIZE - 2
+    distanceText.TextStrokeTransparency = 0
+    
+    -- Health bar (optional)
+    local healthBar
+    if HEALTH_BAR then
+        healthBar = Instance.new("Frame")
+        healthBar.Name = "HealthBar"
+        healthBar.Size = UDim2.new(0.8, 0, 0.1, 0)
+        healthBar.Position = UDim2.new(0.1, 0, 0.9, 0)
+        healthBar.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        healthBar.BorderSizePixel = 0
+        
+        local healthFill = Instance.new("Frame")
+        healthFill.Name = "HealthFill"
+        healthFill.Size = UDim2.new(1, 0, 1, 0)
+        healthFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        healthFill.BorderSizePixel = 0
+        healthFill.Parent = healthBar
+        
+        healthBar.Parent = billboard
+    end
+    
+    playerName.Parent = billboard
+    distanceText.Parent = billboard
+    billboard.Parent = character
+    highlight.Parent = character
+    
+    -- Store references
+    espObjects[character] = {
+        highlight = highlight,
+        billboard = billboard,
+        nameLabel = playerName,
+        distanceLabel = distanceText,
+        healthBar = healthBar
+    }
+    
+    -- Set initial team color
+    updateEspAppearance(character)
+end
+
+-- Updates ESP appearance based on team and distance
+local function updateEspAppearance(character)
+    if not espObjects[character] then return end
+    
+    local player = Players:GetPlayerFromCharacter(character)
+    if not player then return end
+    
+    local isEnemy = true
+    if TEAM_CHECK and player.Team then
+        isEnemy = player.Team ~= LocalPlayer.Team
+    end
+    
+    local color = isEnemy and BOX_COLOR_ENEMY or BOX_COLOR_FRIENDLY
+    espObjects[character].highlight.FillColor = color
+    espObjects[character].highlight.OutlineColor = color
+    
+    -- Update health if enabled
+    if HEALTH_BAR and espObjects[character].healthBar then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            local healthFill = espObjects[character].healthBar:FindFirstChild("HealthFill")
+            if healthFill then
+                local healthPercent = humanoid.Health / humanoid.MaxHealth
+                healthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+                
+                -- Color gradient from green to red
+                healthFill.BackgroundColor3 = Color3.new(1 - healthPercent, healthPercent, 0)
+            end
+        end
+    end
+end
+
+-- Updates distance text
+local function updateEspDistance(character)
+    if not espObjects[character] or not LocalPlayer.Character then return end
+    
+    local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local targetRoot = character:FindFirstChild("HumanoidRootPart")
+    
+    if rootPart and targetRoot then
+        local distance = (rootPart.Position - targetRoot.Position).Magnitude
+        espObjects[character].distanceLabel.Text = string.format("%.1f studs", distance)
+        
+        -- Fade out if beyond max distance
+        local transparency = math.clamp((distance - MAX_DISTANCE/2) / (MAX_DISTANCE/2), 0, 0.9)
+        espObjects[character].highlight.FillTransparency = 0.8 + transparency
+        espObjects[character].highlight.OutlineTransparency = transparency
+    end
+end
+
+-- Cleans up ESP when character is removed
+local function removeEsp(character)
+    if espObjects[character] then
+        espObjects[character].highlight:Destroy()
+        espObjects[character].billboard:Destroy()
+        espObjects[character] = nil
+    end
+end
+
+-- Main ESP loop
+local function espLoop()
+    if not ESP_ENABLED then return end
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local character = player.Character
+            if character then
+                if not espObjects[character] then
+                    createEsp(character)
+                end
+                updateEspAppearance(character)
+                updateEspDistance(character)
+            end
+        end
+    end
+    
+    -- Clean up removed characters
+    for character, _ in pairs(espObjects) do
+        if not character or not character.Parent or not character:FindFirstChild("Humanoid") then
+            removeEsp(character)
+        end
+    end
+end
+
+-- Initialize ESP for existing players
+local function initializeEsp()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local function handleCharacter(character)
+                if character then
+                    createEsp(character)
+                    
+                    -- Connect humanoid events for health updates
+                    local humanoid = character:WaitForChild("Humanoid")
+                    connections[humanoid] = humanoid.HealthChanged:Connect(function()
+                        if espObjects[character] then
+                            updateEspAppearance(character)
+                        end
+                    end)
+                end
+            end
+            
+            if player.Character then
+                handleCharacter(player.Character)
+            end
+            
+            connections[player] = player.CharacterAdded:Connect(handleCharacter)
+        end
+    end
+end
+
+-- Cleanup function
+local function cleanupEsp()
+    ESP_ENABLED = false
+    
+    for _, connection in pairs(connections) do
+        connection:Disconnect()
+    end
+    connections = {}
+    
+    for character, _ in pairs(espObjects) do
+        removeEsp(character)
+    end
+    espObjects = {}
+end
+
+-- Toggle function
+local function toggleEsp()
+    ESP_ENABLED = not ESP_ENABLED
+    
+    if ESP_ENABLED then
+        initializeEsp()
+        RunService:BindToRenderStep("ESPLoop", Enum.RenderPriority.Last.Value, espLoop)
+        print("ESP enabled")
+    else
+        RunService:UnbindFromRenderStep("ESPLoop")
+        cleanupEsp()
+        print("ESP disabled")
+    end
+end
+
+-- Initialize when player joins
+LocalPlayer.CharacterAdded:Connect(function()
+    if ESP_ENABLED then
+        toggleEsp() -- Refresh ESP
+    end
+end)
+
+-- Example toggle with key press (F5)
+game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.F5 then
+        toggleEsp()
+    end
+end)
+
+print("ESP system loaded. Press F5 to toggle.")
