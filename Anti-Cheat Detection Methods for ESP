@@ -1,0 +1,53 @@
+-- Instance Monitoring Detection
+
+local function detectEspObjects()
+    for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+        if player.Character then
+            for _, descendant in ipairs(player.Character:GetDescendants()) do
+                if descendant:IsA("Highlight") or descendant:IsA("BillboardGui") then
+                    if descendant.Name == "ESPHighlight" or descendant.Name == "ESPInfo" then
+                        warn("ESP detected on player:", player.Name)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+game:GetService("RunService").Heartbeat:Connect(function()
+    detectEspObjects()
+end)
+
+-- Memory Scanning Detection
+
+local function checkSuspiciousMemory()
+    -- This would require a custom plugin or external monitoring
+    -- as Roblox doesn't allow direct memory access
+    warn("Memory scanning would need custom implementation")
+end
+
+-- Behavioral Analysis
+
+local function analyzeTrackingBehavior(player)
+    -- Check if player is tracking enemies through walls
+    local suspiciousLooks = 0
+    local maxChecks = 100
+    
+    local function checkLookDirection()
+        if not player.Character then return end
+        
+        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            local lookVector = humanoid.RootPart.CFrame.LookVector
+            -- Check if player is looking directly at hidden enemies
+            -- (This would need more sophisticated implementation)
+        end
+    end
+    
+    for i = 1, maxChecks do
+        checkLookDirection()
+        task.wait(0.1)
+    end
+end
