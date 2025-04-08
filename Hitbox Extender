@@ -1,0 +1,69 @@
+--// UI Setup
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+screenGui.Name = "HitboxExtenderGUI"
+
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 200, 0, 50)
+button.Position = UDim2.new(0, 20, 0, 20)
+button.Text = "Enable Hitbox Extender"
+button.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.Font = Enum.Font.Gotham
+button.TextSize = 18
+button.Parent = screenGui
+button.AutoButtonColor = true
+button.BorderSizePixel = 0
+button.BackgroundTransparency = 0.1
+button.Active = true
+
+-- UI Corner (rounded edges)
+local uiCorner = Instance.new("UICorner", button)
+uiCorner.CornerRadius = UDim.new(0, 12)
+
+-- Hitbox Extender Logic
+local enabled = false
+
+local function toggleHitbox()
+    enabled = not enabled
+    button.Text = enabled and "Disable Hitbox Extender" or "Enable Hitbox Extender"
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local head = player.Character.Head
+            if enabled then
+                head.Size = Vector3.new(5, 5, 5)
+                head.Transparency = 0.5
+                head.Material = Enum.Material.Neon
+                -- Prevent hitbox being reset
+                head:GetPropertyChangedSignal("Size"):Connect(function()
+                    if enabled then
+                        head.Size = Vector3.new(5, 5, 5)
+                    end
+                end)
+            else
+                head.Size = Vector3.new(2, 1, 1)
+                head.Transparency = 0
+                head.Material = Enum.Material.SmoothPlastic
+            end
+        end
+    end
+end
+
+-- Button Click Event
+button.MouseButton1Click:Connect(toggleHitbox)
+
+-- Optional: Update for players who join after toggle is enabled
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(char)
+        if enabled and char:WaitForChild("Head", 5) then
+            local head = char.Head
+            head.Size = Vector3.new(5, 5, 5)
+            head.Transparency = 0.5
+            head.Material = Enum.Material.Neon
+        end
+    end)
+end)
